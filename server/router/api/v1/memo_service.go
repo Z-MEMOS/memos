@@ -99,8 +99,15 @@ func (s *APIV1Service) ListMemos(ctx context.Context, request *v1pb.ListMemosReq
 		// Exclude comments by default.
 		ExcludeComments: true,
 	}
-	if err := s.buildMemoFindWithFilter(ctx, memoFind, request.Filter); err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "failed to build find memos with filter: %v", err)
+
+	if request.View == v1pb.MemoView_MEMO_VIEW_TAGS {
+		if err := s.buildMemoTagsFindWithFilter(ctx, memoFind, request); err != nil {
+			return nil, status.Errorf(codes.InvalidArgument, "failed to build find memos with filter: %v", err)
+		}
+	} else {
+		if err := s.buildMemoFindWithFilter(ctx, memoFind, request.Filter); err != nil {
+			return nil, status.Errorf(codes.InvalidArgument, "failed to build find memos with filter: %v", err)
+		}
 	}
 
 	var limit, offset int
@@ -526,10 +533,16 @@ func (s *APIV1Service) RenameMemoTag(ctx context.Context, request *v1pb.RenameMe
 		return nil, status.Errorf(codes.Internal, "failed to get current user")
 	}
 
+	workspaceMemoRelatedSetting, err := s.Store.GetWorkspaceMemoRelatedSetting(ctx)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to get workspace memo related setting")
+	}
+
 	memoFind := &store.FindMemo{
 		CreatorID:       &user.ID,
 		PayloadFind:     &store.FindMemoPayload{TagSearch: []string{request.OldTag}},
 		ExcludeComments: true,
+		ShareTags:       workspaceMemoRelatedSetting.ShareTags,
 	}
 	if (request.Parent) != "memos/-" {
 		memoID, err := ExtractMemoIDFromName(request.Parent)
@@ -576,11 +589,17 @@ func (s *APIV1Service) DeleteMemoTag(ctx context.Context, request *v1pb.DeleteMe
 		return nil, status.Errorf(codes.Internal, "failed to get current user")
 	}
 
+	workspaceMemoRelatedSetting, err := s.Store.GetWorkspaceMemoRelatedSetting(ctx)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to get workspace memo related setting")
+	}
+
 	memoFind := &store.FindMemo{
 		CreatorID:       &user.ID,
 		PayloadFind:     &store.FindMemoPayload{TagSearch: []string{request.Tag}},
 		ExcludeContent:  true,
 		ExcludeComments: true,
+		ShareTags:       workspaceMemoRelatedSetting.ShareTags,
 	}
 	if (request.Parent) != "memos/-" {
 		memoID, err := ExtractMemoIDFromName(request.Parent)
